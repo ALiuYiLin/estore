@@ -1,8 +1,12 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  readText: (path: string): Promise<string> => ipcRenderer.invoke('fs:readText', path),
+  join: (...parts: string[]): Promise<string> => ipcRenderer.invoke('fs:join', ...parts),
+  exists: (path: string): Promise<boolean> => ipcRenderer.invoke('fs:exists', path)
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

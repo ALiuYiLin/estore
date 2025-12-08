@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { join, resolve, sep } from 'path'
+import { promises as fs } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -52,6 +53,36 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  const BASE_APPS_DIR = resolve(process.cwd(), 'apps')
+
+  const safeResolve = (p: string): string => {
+    const abs = resolve(BASE_APPS_DIR, p)
+    if (!abs.startsWith(BASE_APPS_DIR + sep)) {
+      throw new Error('Path outside apps directory')
+    }
+    return abs
+  }
+
+  ipcMain.handle('fs:join', (_e, ...parts: string[]) => {
+    return join(...parts)
+  })
+
+  ipcMain.handle('fs:readText', async (_e, p: string) => {
+    const abs = safeResolve(p)
+    const buf = await fs.readFile(abs)
+    return buf.toString('utf-8')
+  })
+
+  ipcMain.handle('fs:exists', async (_e, p: string) => {
+    try {
+      const abs = safeResolve(p)
+      await fs.access(abs)
+      return true
+    } catch {
+      return false
+    }
+  })
 
   createWindow()
 

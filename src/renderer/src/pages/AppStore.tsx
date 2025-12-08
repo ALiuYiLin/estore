@@ -19,7 +19,7 @@ export default function AppStore(): React.JSX.Element {
   // userApps：用户通过“添加应用”导入的子应用列表
   const [userApps, setUserApps] = useState<LoadedApp[]>([])
   // viewer：当前打开的子应用数据（用于弹窗展示）
-  const [viewer, setViewer] = useState<{ title: string; html?: string; css?: string; js?: string } | null>(null)
+  const [viewer, setViewer] = useState<{ title: string; entry?: string; html?: string; css?: string; js?: string } | null>(null)
   // dirInputRef：文件选择 input 的引用，用于设置 webkitdirectory 以便选目录
   const dirInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -71,14 +71,15 @@ export default function AppStore(): React.JSX.Element {
   }
 
   // openApp：打开子应用（弹窗展示）
-  // 若该应用来源于“添加应用”，则从 userApps 中取到对应 HTML/CSS；否则仅展示标题
+  // 若该应用来源于“添加应用”，则从 userApps 中取到对应 HTML/CSS/JS
+  // 否则按 apps 目录下的 entry 路径由 SubAppModal 动态解析
   const openApp = (meta: AppMeta): void => {
-    console.log('meta: ', meta);
     const loaded = userApps.find((u) => u.meta.id === meta.id)
     if (loaded) {
       setViewer({ title: loaded.meta.name, html: loaded.html, css: loaded.css, js: loaded.js })
     } else {
-      setViewer({ title: meta.name })
+      const entry = (meta as unknown as { entry?: string }).entry || 'index.html'
+      setViewer({ title: meta.name, entry: `apps/${meta.id}/${entry}` })
     }
   }
 
@@ -113,6 +114,7 @@ export default function AppStore(): React.JSX.Element {
       <SubAppModal
         visible={!!viewer}
         title={viewer?.title || ''}
+        entry={viewer?.entry}
         html={viewer?.html}
         css={viewer?.css}
         js={viewer?.js}
