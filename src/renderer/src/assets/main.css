@@ -146,9 +146,10 @@ code {
   font-size: 14px;
   line-height: 14px;
   opacity: 0.8;
-  &:last-child {
-    border: none;
-  }
+}
+.versions li:last-child {
+  border: none;
+}
 
 /* App Store */
 .app-store {
@@ -178,9 +179,8 @@ code {
   gap: 16px;
   padding: 14px 16px;
   border-radius: 12px;
-  background-color: var(--ev-c-bg-soft);
+  background-color: var(--color-background-soft);
   border: 1px solid var(--ev-c-gray-2);
-  background-color: red;
 }
 
 .app-icon img,
@@ -315,7 +315,7 @@ code {
   background: #1f2025;
   border: 1px solid #2f3037;
 }
-}
+
 
 @media (max-width: 720px) {
   .text {

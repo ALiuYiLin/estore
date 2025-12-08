@@ -23,17 +23,34 @@ export default function SubAppModal({ visible, title, html, css, onClose }: Prop
 
     while (root.firstChild) root.removeChild(root.firstChild)
 
-    const wrapper = document.createElement('div')
-    wrapper.setAttribute('data-subapp', 'true')
-    if (html) wrapper.innerHTML = html
-    root.appendChild(wrapper)
-
     if (css) {
       const styleEl = document.createElement('style')
       styleEl.textContent = css
       root.appendChild(styleEl)
     }
+
+    const wrapper = document.createElement('div')
+    wrapper.setAttribute('data-subapp', 'true')
+    if (html) {
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
+        const bodyHTML = doc?.body?.innerHTML ?? html
+        wrapper.innerHTML = bodyHTML
+      } catch {
+        wrapper.innerHTML = html
+      }
+    } else {
+      wrapper.innerHTML = '<div style="padding:12px;color:#a3a3a3;">暂无可显示的内容</div>'
+    }
+    root.appendChild(wrapper)
   }, [visible, html, css])
+
+  useEffect(() => {
+    return () => {
+      shadowRef.current = null
+    }
+  }, [])
 
   if (!visible) return null
   return (
@@ -52,4 +69,3 @@ export default function SubAppModal({ visible, title, html, css, onClose }: Prop
     </div>
   )
 }
-
