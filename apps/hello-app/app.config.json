@@ -1,0 +1,11 @@
+{
+  "id": "hello-app",
+  "name": "Hello App",
+  "version": "0.1.0",
+  "description": "示例单页应用，仅用于结构演示。",
+  "author": "estore",
+  "tags": ["example", "demo"],
+  "icon": "data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22><rect width=%2248%22 height=%2248%22 rx=%228%22 fill=%22%233178c6%22/><text x=%2210%22 y=%2232%22 font-size=%2220%22 fill=%22%23fff%22>Hi</text></svg>",
+  "entry": "index.html"
+}
+
