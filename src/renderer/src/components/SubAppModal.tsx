@@ -11,16 +11,11 @@ interface Props {
   title: string
   html?: string
   css?: string
+  js?: string
   onClose: () => void
 }
 
-export default function SubAppModal({
-  visible,
-  title,
-  html,
-  css,
-  onClose
-}: Props): React.JSX.Element | null {
+export default function SubAppModal({ visible, title, html, css, js, onClose }: Props): React.JSX.Element | null {
   // hostRef：用于挂载 Shadow DOM 的宿主元素引用
   const hostRef = useRef<HTMLDivElement | null>(null)
   // shadowRef：保存已创建的 ShadowRoot 引用，避免重复创建
@@ -68,7 +63,25 @@ export default function SubAppModal({
     }
     // 最后将内容包裹元素挂载到 ShadowRoot
     root.appendChild(wrapper)
-  }, [visible, html, css])
+
+    if (js) {
+      try {
+        const localDocument = {
+          getElementById: (id: string) => wrapper.querySelector(`#${id}`),
+          querySelector: (sel: string) => wrapper.querySelector(sel),
+          querySelectorAll: (sel: string) => wrapper.querySelectorAll(sel)
+        } as Document
+        const fn = new Function('document', 'window', js)
+        fn(localDocument, window)
+      } catch (err) {
+        const note = document.createElement('div')
+        note.textContent = '子应用脚本未执行（可能受 CSP 限制或脚本错误）'
+        note.setAttribute('style', 'padding:12px;color:#e67e22;')
+        wrapper.appendChild(note)
+        console.error(err)
+      }
+    }
+  }, [visible, html, css, js])
 
   // 组件卸载时清理 ShadowRoot 引用，避免持有过期引用
   useEffect(() => {

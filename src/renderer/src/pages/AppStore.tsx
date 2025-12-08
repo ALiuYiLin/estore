@@ -12,13 +12,14 @@ type LoadedApp = {
   meta: AppMeta
   html?: string
   css?: string
+  js?: string
 }
 
 export default function AppStore(): React.JSX.Element {
   // userApps：用户通过“添加应用”导入的子应用列表
   const [userApps, setUserApps] = useState<LoadedApp[]>([])
   // viewer：当前打开的子应用数据（用于弹窗展示）
-  const [viewer, setViewer] = useState<{ title: string; html?: string; css?: string } | null>(null)
+  const [viewer, setViewer] = useState<{ title: string; html?: string; css?: string; js?: string } | null>(null)
   // dirInputRef：文件选择 input 的引用，用于设置 webkitdirectory 以便选目录
   const dirInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -50,6 +51,7 @@ export default function AppStore(): React.JSX.Element {
     const config = map.get('app.config.json')
     const html = map.get('index.html')
     const css = map.get('index.css')
+    const js = map.get('index.js')
 
     // 缺少必需文件时直接返回，保护主流程
     if (!config || !html) return
@@ -60,9 +62,10 @@ export default function AppStore(): React.JSX.Element {
     const htmlText = await html.text()
     // 若存在 CSS 文件则读取文本，否则保持 undefined
     const cssText = css ? await css.text() : undefined
+    const jsText = js ? await js.text() : undefined
 
     // 将新应用追加到列表，保存元信息与 HTML/CSS 内容
-    setUserApps((prev) => [...prev, { meta: cfg, html: htmlText, css: cssText }])
+    setUserApps((prev) => [...prev, { meta: cfg, html: htmlText, css: cssText, js: jsText }])
     // 清空 input 的值，确保下次选择相同目录也能触发 onChange
     e.target.value = ''
   }
@@ -73,7 +76,7 @@ export default function AppStore(): React.JSX.Element {
     console.log('meta: ', meta);
     const loaded = userApps.find((u) => u.meta.id === meta.id)
     if (loaded) {
-      setViewer({ title: loaded.meta.name, html: loaded.html, css: loaded.css })
+      setViewer({ title: loaded.meta.name, html: loaded.html, css: loaded.css, js: loaded.js })
     } else {
       setViewer({ title: meta.name })
     }
@@ -112,6 +115,7 @@ export default function AppStore(): React.JSX.Element {
         title={viewer?.title || ''}
         html={viewer?.html}
         css={viewer?.css}
+        js={viewer?.js}
         onClose={() => setViewer(null)}
       />
     </div>
