@@ -1,4 +1,4 @@
-import { runInSandbox } from './sandbox'
+import { runInSandbox } from '../sandbox'
 
 export type EntryResult = { htmlText: string; cssText: string; jsText: string }
 export type EntryOpts = { entry?: string; html?: string; css?: string; js?: string }

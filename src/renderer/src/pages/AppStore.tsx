@@ -19,7 +19,13 @@ export default function AppStore(): React.JSX.Element {
   // userApps：用户通过“添加应用”导入的子应用列表
   const [userApps, setUserApps] = useState<LoadedApp[]>([])
   // viewer：当前打开的子应用数据（用于弹窗展示）
-  const [viewer, setViewer] = useState<{ title: string; entry?: string; html?: string; css?: string; js?: string } | null>(null)
+  const [viewer, setViewer] = useState<{
+    title: string
+    entry?: string
+    html?: string
+    css?: string
+    js?: string
+  } | null>(null)
   // dirInputRef：文件选择 input 的引用，用于设置 webkitdirectory 以便选目录
   const dirInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -37,36 +43,77 @@ export default function AppStore(): React.JSX.Element {
   // 5. 更新 userApps 状态，追加新应用
   // 6. 重置 input 的值，允许再次选择相同目录时触发 onChange
   const onAddApp = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    // FileList：目录选择得到的文件集合
     const files = e.target.files
-    // 若没有选择文件则直接返回
     if (!files || files.length === 0) return
-    // 构建名称到 File 的映射（统一小写）
-    const map = new Map<string, File>()
+    const byName = new Map<string, File>()
+    const byRel = new Map<string, File>()
     for (const f of Array.from(files)) {
-      map.set(f.name.toLowerCase(), f)
+      byName.set(f.name.toLowerCase(), f)
+      const rel = (
+        f as unknown as { webkitRelativePath?: string }
+      ).webkitRelativePath?.toLowerCase()
+      if (rel) byRel.set(rel, f)
     }
 
-    // 获取目标文件：配置、HTML、CSS（CSS 可选）
-    const config = map.get('app.config.json')
-    const html = map.get('index.html')
-    const css = map.get('index.css')
-    const js = map.get('index.js')
+    const config = byName.get('app.config.json') || byRel.get('app.config.json')
+    if (!config) return
+    const manifest = JSON.parse(await config.text()) as Partial<AppMeta> & {
+      entry?: string
+      html?: string
+      css?: string | string[]
+      js?: string | string[]
+    }
 
-    // 缺少必需文件时直接返回，保护主流程
-    if (!config || !html) return
+    const resolveFile = (p?: string): File | undefined => {
+      if (!p) return undefined
+      const norm = p.toLowerCase()
+      const base = norm.split(/[/\\]/).pop() || norm
+      return byRel.get(norm) || byName.get(base)
+    }
 
-    // 解析配置 JSON（允许可选 entry 字段）
-    const cfg = JSON.parse(await config.text()) as AppMeta & { entry?: string }
-    // 读取 HTML 文本
-    const htmlText = await html.text()
-    // 若存在 CSS 文件则读取文本，否则保持 undefined
-    const cssText = css ? await css.text() : undefined
-    const jsText = js ? await js.text() : undefined
+    const htmlFile =
+      resolveFile(manifest.entry) || resolveFile(manifest.html) || byName.get('index.html')
+    if (!htmlFile) return
+    const htmlText = await htmlFile.text()
 
-    // 将新应用追加到列表，保存元信息与 HTML/CSS 内容
-    setUserApps((prev) => [...prev, { meta: cfg, html: htmlText, css: cssText, js: jsText }])
-    // 清空 input 的值，确保下次选择相同目录也能触发 onChange
+    const cssFiles: File[] = []
+    if (Array.isArray(manifest.css)) {
+      for (const p of manifest.css) {
+        const f = resolveFile(p)
+        if (f) cssFiles.push(f)
+      }
+    } else {
+      const f = resolveFile(manifest.css) || byName.get('index.css')
+      if (f) cssFiles.push(f)
+    }
+    const cssText = cssFiles.length
+      ? (await Promise.all(cssFiles.map((f) => f.text()))).join('\n')
+      : undefined
+
+    const jsFiles: File[] = []
+    if (Array.isArray(manifest.js)) {
+      for (const p of manifest.js) {
+        const f = resolveFile(p)
+        if (f) jsFiles.push(f)
+      }
+    } else {
+      const f = resolveFile(manifest.js) || byName.get('index.js')
+      if (f) jsFiles.push(f)
+    }
+    const jsText = jsFiles.length
+      ? (await Promise.all(jsFiles.map((f) => f.text()))).join('\n;')
+      : undefined
+
+    const meta: AppMeta = {
+      id: manifest.id as string,
+      name: (manifest.name as string) || 'App',
+      version: (manifest.version as string) || '0.0.0',
+      description: (manifest.description as string) || '',
+      author: manifest.author,
+      tags: manifest.tags,
+      icon: manifest.icon
+    }
+    setUserApps((prev) => [...prev, { meta, html: htmlText, css: cssText, js: jsText }])
     e.target.value = ''
   }
 
