@@ -6,6 +6,7 @@ interface Props {
 }
 
 export default function AppItem({ app, onOpen }: Props): React.JSX.Element {
+  const canOpen = !!(app.entry || app.html)
   return (
     <div className="app-item">
       <div className="app-icon">
@@ -32,9 +33,11 @@ export default function AppItem({ app, onOpen }: Props): React.JSX.Element {
         )}
       </div>
       <div className="app-actions">
-        <button className="app-action" onClick={onOpen}>
-          打开
-        </button>
+        {canOpen ? (
+          <button className="app-action" onClick={onOpen}>打开</button>
+        ) : (
+          <span className="app-action app-action--disabled">不可用</span>
+        )}
       </div>
     </div>
   )

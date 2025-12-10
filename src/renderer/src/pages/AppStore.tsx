@@ -3,7 +3,8 @@ import { APPS } from '../data/apps'
 import AppItem from '../components/AppItem'
 import SubAppModal from '../components/SubAppModal'
 import type { AppMeta, AppWithContent } from '../types/app'
-import { loadHtmlFile, loadCssFiles, loadJsFiles, type Manifest } from '../utils/files/loaders'
+import { loadHtmlText, loadCssText, loadJsText } from '../utils/files/loaders'
+import type { AppManifest } from '../types/app'
 import { buildFileMaps } from '../utils/files/mapping'
 
 // 使用统一数据结构 AppWithContent
@@ -44,46 +45,42 @@ export default function AppStore(): React.JSX.Element {
 
     const config = byName.get('app.config.json') || byRel.get('app.config.json')
     if (!config) return
-    const manifest = JSON.parse(await config.text()) as Manifest
+    const manifest = JSON.parse(await config.text()) as AppMeta & AppManifest
     // 解析 CSS/JS 路径时，优先按相对路径查找，再按文件名查找
 
-    const htmlFile = loadHtmlFile(byName, byRel, manifest)
-    if (!htmlFile) return
-    const htmlText = await htmlFile.text()
-
-    const cssFiles: File[] = loadCssFiles(byName, byRel, manifest)
-    const cssText = cssFiles.length
-      ? (await Promise.all(cssFiles.map((f) => f.text()))).join('\n')
-      : undefined
-
-    const jsFiles: File[] = loadJsFiles(byName, byRel, manifest)
-    const jsText = jsFiles.length
-      ? (await Promise.all(jsFiles.map((f) => f.text()))).join('\n;')
-      : undefined
-
     const meta: AppMeta = {
-      id: manifest.id as string,
-      name: (manifest.name as string) || 'App',
-      version: (manifest.version as string) || '0.0.0',
-      description: (manifest.description as string) || '',
+      id: manifest.id,
+      name: manifest.name || 'App',
+      version: manifest.version || '0.0.0',
+      description: manifest.description || '',
       author: manifest.author,
       tags: manifest.tags,
-      icon: manifest.icon
+      icon: manifest.icon,
+      entry: manifest.entry
     }
-    setUserApps((prev) => [...prev, { meta, html: htmlText, css: cssText, js: jsText }])
+    setUserApps((prev) => [
+      ...prev,
+      { meta, entry: manifest.entry, upload: { byName, byRel, manifest } }
+    ])
     e.target.value = ''
   }
 
   // openApp：打开子应用（弹窗展示）
   // 若该应用来源于“添加应用”，则从 userApps 中取到对应 HTML/CSS/JS
   // 否则按 apps 目录下的 entry 路径由 SubAppModal 动态解析
-  const openItem = (item: AppWithContent): void => {
-    if (item.html || item.css || item.js) {
-      setViewer({ title: item.meta.name, html: item.html, css: item.css, js: item.js })
-    } else {
-      const entry = (item.entry as string) || 'index.html'
-      setViewer({ title: item.meta.name, entry: `apps/${item.meta.id}/${entry}` })
+  const openItem = async (item: AppWithContent): Promise<void> => {
+    if (item.upload) {
+      const { byName, byRel, manifest } = item.upload
+      const htmlText = await loadHtmlText(byName, byRel, manifest)
+      if (!htmlText) return
+      const cssText = await loadCssText(byName, byRel, manifest)
+      const jsText = await loadJsText(byName, byRel, manifest)
+      setViewer({ title: item.meta.name, html: htmlText, css: cssText, js: jsText })
+      return
     }
+
+    const entry = (item.entry as string) || 'index.html'
+    setViewer({ title: item.meta.name, entry: `apps/${item.meta.id}/${entry}` })
   }
 
   // 启用目录选择：通过设置非标准属性 webkitdirectory 允许 <input type="file"> 选择目录

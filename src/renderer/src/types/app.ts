@@ -6,6 +6,17 @@ export interface AppMeta {
   author?: string
   tags?: string[]
   icon?: string
+  entry?: string
+  html?: string
+  css?: string
+  js?: string
+}
+
+export interface AppManifest {
+  entry?: string
+  html?: string
+  css?: string | string[]
+  js?: string | string[]
 }
 
 export interface AppWithContent {
@@ -14,4 +25,9 @@ export interface AppWithContent {
   html?: string
   css?: string
   js?: string
+  upload?: {
+    byName: Map<string, File>
+    byRel: Map<string, File>
+    manifest: AppManifest
+  }
 }

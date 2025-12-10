@@ -1,12 +1,7 @@
-import type { AppMeta } from '../../types/app'
+import type { AppManifest } from '../../types/app'
 import { resolveFile } from './resolveFile'
 
-export type Manifest = Partial<AppMeta> & {
-  entry?: string
-  html?: string
-  css?: string | string[]
-  js?: string | string[]
-}
+export type Manifest = AppManifest
 
 export function loadHtmlFile(
   byName: Map<string, File>,
@@ -56,3 +51,34 @@ export function loadJsFiles(
   return out
 }
 
+export async function loadHtmlText(
+  byName: Map<string, File>,
+  byRel: Map<string, File>,
+  manifest: Manifest
+): Promise<string | undefined> {
+  const file = loadHtmlFile(byName, byRel, manifest)
+  if (!file) return undefined
+  return file.text()
+}
+
+export async function loadCssText(
+  byName: Map<string, File>,
+  byRel: Map<string, File>,
+  manifest: Manifest
+): Promise<string | undefined> {
+  const files = loadCssFiles(byName, byRel, manifest)
+  if (!files.length) return undefined
+  const texts = await Promise.all(files.map((f) => f.text()))
+  return texts.join('\n')
+}
+
+export async function loadJsText(
+  byName: Map<string, File>,
+  byRel: Map<string, File>,
+  manifest: Manifest
+): Promise<string | undefined> {
+  const files = loadJsFiles(byName, byRel, manifest)
+  if (!files.length) return undefined
+  const texts = await Promise.all(files.map((f) => f.text()))
+  return texts.join('\n;')
+}
