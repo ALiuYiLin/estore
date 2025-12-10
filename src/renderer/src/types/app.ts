@@ -7,3 +7,11 @@ export interface AppMeta {
   tags?: string[]
   icon?: string
 }
+
+export interface AppWithContent {
+  meta: AppMeta
+  entry?: string
+  html?: string
+  css?: string
+  js?: string
+}

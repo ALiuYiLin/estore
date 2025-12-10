@@ -39,4 +39,3 @@ export function runInSandbox(wrapper: HTMLElement, code?: string): void {
     console.error(err)
   }
 }
-
