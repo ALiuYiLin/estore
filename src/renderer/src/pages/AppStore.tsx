@@ -2,22 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { APPS } from '../data/apps'
 import AppItem from '../components/AppItem'
 import SubAppModal from '../components/SubAppModal'
-import type { AppMeta } from '../types/app'
+import type { AppMeta, AppWithContent } from '../types/app'
+import { resolveFile as resolveFileUtil } from '../utils/files/resolveFile'
 
-// LoadedApp：表示已添加到主应用中的子应用数据
-// - meta：来自 app.config.json 的应用元信息
-// - html：子应用的 HTML 文本（通常是 index.html 的内容）
-// - css：子应用的 CSS 文本（通常是 index.css 的内容）
-type LoadedApp = {
-  meta: AppMeta
-  html?: string
-  css?: string
-  js?: string
-}
+// 使用统一数据结构 AppWithContent
 
 export default function AppStore(): React.JSX.Element {
   // userApps：用户通过“添加应用”导入的子应用列表
-  const [userApps, setUserApps] = useState<LoadedApp[]>([])
+  const [userApps, setUserApps] = useState<AppWithContent[]>([])
   // viewer：当前打开的子应用数据（用于弹窗展示）
   const [viewer, setViewer] = useState<{
     title: string
@@ -30,8 +22,8 @@ export default function AppStore(): React.JSX.Element {
   const dirInputRef = useRef<HTMLInputElement | null>(null)
 
   // allApps：合并静态内置应用与用户添加的应用（仅取 meta 用于列表渲染）
-  const allApps = useMemo<AppMeta[]>(() => {
-    return [...APPS, ...userApps.map((u) => u.meta)]
+  const allApps = useMemo<AppWithContent[]>(() => {
+    return [...APPS.map((a) => ({ meta: a })), ...userApps]
   }, [userApps])
 
   // onAddApp：处理“添加应用”的目录选择事件
@@ -63,13 +55,8 @@ export default function AppStore(): React.JSX.Element {
       css?: string | string[]
       js?: string | string[]
     }
-
-    const resolveFile = (p?: string): File | undefined => {
-      if (!p) return undefined
-      const norm = p.toLowerCase()
-      const base = norm.split(/[/\\]/).pop() || norm
-      return byRel.get(norm) || byName.get(base)
-    }
+    // 解析 CSS/JS 路径时，优先按相对路径查找，再按文件名查找
+    const resolveFile = (p?: string): File | undefined => resolveFileUtil(byName, byRel, p)
 
     const htmlFile =
       resolveFile(manifest.entry) || resolveFile(manifest.html) || byName.get('index.html')
@@ -120,13 +107,12 @@ export default function AppStore(): React.JSX.Element {
   // openApp：打开子应用（弹窗展示）
   // 若该应用来源于“添加应用”，则从 userApps 中取到对应 HTML/CSS/JS
   // 否则按 apps 目录下的 entry 路径由 SubAppModal 动态解析
-  const openApp = (meta: AppMeta): void => {
-    const loaded = userApps.find((u) => u.meta.id === meta.id)
-    if (loaded) {
-      setViewer({ title: loaded.meta.name, html: loaded.html, css: loaded.css, js: loaded.js })
+  const openItem = (item: AppWithContent): void => {
+    if (item.html || item.css || item.js) {
+      setViewer({ title: item.meta.name, html: item.html, css: item.css, js: item.js })
     } else {
-      const entry = (meta as unknown as { entry?: string }).entry || 'index.html'
-      setViewer({ title: meta.name, entry: `apps/${meta.id}/${entry}` })
+      const entry = (item.entry as string) || 'index.html'
+      setViewer({ title: item.meta.name, entry: `apps/${item.meta.id}/${entry}` })
     }
   }
 
@@ -154,8 +140,8 @@ export default function AppStore(): React.JSX.Element {
         </label>
       </div>
       <div className="app-list">
-        {allApps.map((app) => (
-          <AppItem key={app.id} app={app} onOpen={() => openApp(app)} />
+        {allApps.map((item) => (
+          <AppItem key={item.meta.id} app={item.meta} onOpen={() => openItem(item)} />
         ))}
       </div>
       <SubAppModal
