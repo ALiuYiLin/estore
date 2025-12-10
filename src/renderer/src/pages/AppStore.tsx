@@ -3,7 +3,8 @@ import { APPS } from '../data/apps'
 import AppItem from '../components/AppItem'
 import SubAppModal from '../components/SubAppModal'
 import type { AppMeta, AppWithContent } from '../types/app'
-import { resolveFile as resolveFileUtil } from '../utils/files/resolveFile'
+import { loadHtmlFile, loadCssFiles, loadJsFiles, type Manifest } from '../utils/files/loaders'
+import { buildFileMaps } from '../utils/files/mapping'
 
 // 使用统一数据结构 AppWithContent
 
@@ -37,56 +38,25 @@ export default function AppStore(): React.JSX.Element {
   const onAddApp = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const files = e.target.files
     if (!files || files.length === 0) return
-    const byName = new Map<string, File>()
-    const byRel = new Map<string, File>()
-    for (const f of Array.from(files)) {
-      byName.set(f.name.toLowerCase(), f)
-      const rel = (
-        f as unknown as { webkitRelativePath?: string }
-      ).webkitRelativePath?.toLowerCase()
-      if (rel) byRel.set(rel, f)
-    }
+    // 1. 将文件名（小写）映射到 File 以便快速查找目标文件
+    // 2. 将相对路径（包含文件名）映射到 File 以便按相对路径查找
+    const { byName, byRel } = buildFileMaps(files)
 
     const config = byName.get('app.config.json') || byRel.get('app.config.json')
     if (!config) return
-    const manifest = JSON.parse(await config.text()) as Partial<AppMeta> & {
-      entry?: string
-      html?: string
-      css?: string | string[]
-      js?: string | string[]
-    }
+    const manifest = JSON.parse(await config.text()) as Manifest
     // 解析 CSS/JS 路径时，优先按相对路径查找，再按文件名查找
-    const resolveFile = (p?: string): File | undefined => resolveFileUtil(byName, byRel, p)
 
-    const htmlFile =
-      resolveFile(manifest.entry) || resolveFile(manifest.html) || byName.get('index.html')
+    const htmlFile = loadHtmlFile(byName, byRel, manifest)
     if (!htmlFile) return
     const htmlText = await htmlFile.text()
 
-    const cssFiles: File[] = []
-    if (Array.isArray(manifest.css)) {
-      for (const p of manifest.css) {
-        const f = resolveFile(p)
-        if (f) cssFiles.push(f)
-      }
-    } else {
-      const f = resolveFile(manifest.css) || byName.get('index.css')
-      if (f) cssFiles.push(f)
-    }
+    const cssFiles: File[] = loadCssFiles(byName, byRel, manifest)
     const cssText = cssFiles.length
       ? (await Promise.all(cssFiles.map((f) => f.text()))).join('\n')
       : undefined
 
-    const jsFiles: File[] = []
-    if (Array.isArray(manifest.js)) {
-      for (const p of manifest.js) {
-        const f = resolveFile(p)
-        if (f) jsFiles.push(f)
-      }
-    } else {
-      const f = resolveFile(manifest.js) || byName.get('index.js')
-      if (f) jsFiles.push(f)
-    }
+    const jsFiles: File[] = loadJsFiles(byName, byRel, manifest)
     const jsText = jsFiles.length
       ? (await Promise.all(jsFiles.map((f) => f.text()))).join('\n;')
       : undefined
