@@ -2,30 +2,29 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { APPS } from '../data/apps'
 import AppItem from '../components/AppItem'
 import SubAppModal from '../components/SubAppModal'
-import type { AppMeta } from '../types/app'
+import type { AppMeta, AppWithContent } from '../types/app'
+import { loadHtmlFile, loadCssFiles, loadJsFiles, type Manifest } from '../utils/files/loaders'
+import { buildFileMaps } from '../utils/files/mapping'
 
-// LoadedApp：表示已添加到主应用中的子应用数据
-// - meta：来自 app.config.json 的应用元信息
-// - html：子应用的 HTML 文本（通常是 index.html 的内容）
-// - css：子应用的 CSS 文本（通常是 index.css 的内容）
-type LoadedApp = {
-  meta: AppMeta
-  html?: string
-  css?: string
-  js?: string
-}
+// 使用统一数据结构 AppWithContent
 
 export default function AppStore(): React.JSX.Element {
   // userApps：用户通过“添加应用”导入的子应用列表
-  const [userApps, setUserApps] = useState<LoadedApp[]>([])
+  const [userApps, setUserApps] = useState<AppWithContent[]>([])
   // viewer：当前打开的子应用数据（用于弹窗展示）
-  const [viewer, setViewer] = useState<{ title: string; entry?: string; html?: string; css?: string; js?: string } | null>(null)
+  const [viewer, setViewer] = useState<{
+    title: string
+    entry?: string
+    html?: string
+    css?: string
+    js?: string
+  } | null>(null)
   // dirInputRef：文件选择 input 的引用，用于设置 webkitdirectory 以便选目录
   const dirInputRef = useRef<HTMLInputElement | null>(null)
 
   // allApps：合并静态内置应用与用户添加的应用（仅取 meta 用于列表渲染）
-  const allApps = useMemo<AppMeta[]>(() => {
-    return [...APPS, ...userApps.map((u) => u.meta)]
+  const allApps = useMemo<AppWithContent[]>(() => {
+    return [...APPS.map((a) => ({ meta: a })), ...userApps]
   }, [userApps])
 
   // onAddApp：处理“添加应用”的目录选择事件
@@ -37,49 +36,53 @@ export default function AppStore(): React.JSX.Element {
   // 5. 更新 userApps 状态，追加新应用
   // 6. 重置 input 的值，允许再次选择相同目录时触发 onChange
   const onAddApp = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    // FileList：目录选择得到的文件集合
     const files = e.target.files
-    // 若没有选择文件则直接返回
     if (!files || files.length === 0) return
-    // 构建名称到 File 的映射（统一小写）
-    const map = new Map<string, File>()
-    for (const f of Array.from(files)) {
-      map.set(f.name.toLowerCase(), f)
+    // 1. 将文件名（小写）映射到 File 以便快速查找目标文件
+    // 2. 将相对路径（包含文件名）映射到 File 以便按相对路径查找
+    const { byName, byRel } = buildFileMaps(files)
+
+    const config = byName.get('app.config.json') || byRel.get('app.config.json')
+    if (!config) return
+    const manifest = JSON.parse(await config.text()) as Manifest
+    // 解析 CSS/JS 路径时，优先按相对路径查找，再按文件名查找
+
+    const htmlFile = loadHtmlFile(byName, byRel, manifest)
+    if (!htmlFile) return
+    const htmlText = await htmlFile.text()
+
+    const cssFiles: File[] = loadCssFiles(byName, byRel, manifest)
+    const cssText = cssFiles.length
+      ? (await Promise.all(cssFiles.map((f) => f.text()))).join('\n')
+      : undefined
+
+    const jsFiles: File[] = loadJsFiles(byName, byRel, manifest)
+    const jsText = jsFiles.length
+      ? (await Promise.all(jsFiles.map((f) => f.text()))).join('\n;')
+      : undefined
+
+    const meta: AppMeta = {
+      id: manifest.id as string,
+      name: (manifest.name as string) || 'App',
+      version: (manifest.version as string) || '0.0.0',
+      description: (manifest.description as string) || '',
+      author: manifest.author,
+      tags: manifest.tags,
+      icon: manifest.icon
     }
-
-    // 获取目标文件：配置、HTML、CSS（CSS 可选）
-    const config = map.get('app.config.json')
-    const html = map.get('index.html')
-    const css = map.get('index.css')
-    const js = map.get('index.js')
-
-    // 缺少必需文件时直接返回，保护主流程
-    if (!config || !html) return
-
-    // 解析配置 JSON（允许可选 entry 字段）
-    const cfg = JSON.parse(await config.text()) as AppMeta & { entry?: string }
-    // 读取 HTML 文本
-    const htmlText = await html.text()
-    // 若存在 CSS 文件则读取文本，否则保持 undefined
-    const cssText = css ? await css.text() : undefined
-    const jsText = js ? await js.text() : undefined
-
-    // 将新应用追加到列表，保存元信息与 HTML/CSS 内容
-    setUserApps((prev) => [...prev, { meta: cfg, html: htmlText, css: cssText, js: jsText }])
-    // 清空 input 的值，确保下次选择相同目录也能触发 onChange
+    setUserApps((prev) => [...prev, { meta, html: htmlText, css: cssText, js: jsText }])
     e.target.value = ''
   }
 
   // openApp：打开子应用（弹窗展示）
   // 若该应用来源于“添加应用”，则从 userApps 中取到对应 HTML/CSS/JS
   // 否则按 apps 目录下的 entry 路径由 SubAppModal 动态解析
-  const openApp = (meta: AppMeta): void => {
-    const loaded = userApps.find((u) => u.meta.id === meta.id)
-    if (loaded) {
-      setViewer({ title: loaded.meta.name, html: loaded.html, css: loaded.css, js: loaded.js })
+  const openItem = (item: AppWithContent): void => {
+    if (item.html || item.css || item.js) {
+      setViewer({ title: item.meta.name, html: item.html, css: item.css, js: item.js })
     } else {
-      const entry = (meta as unknown as { entry?: string }).entry || 'index.html'
-      setViewer({ title: meta.name, entry: `apps/${meta.id}/${entry}` })
+      const entry = (item.entry as string) || 'index.html'
+      setViewer({ title: item.meta.name, entry: `apps/${item.meta.id}/${entry}` })
     }
   }
 
@@ -107,8 +110,8 @@ export default function AppStore(): React.JSX.Element {
         </label>
       </div>
       <div className="app-list">
-        {allApps.map((app) => (
-          <AppItem key={app.id} app={app} onOpen={() => openApp(app)} />
+        {allApps.map((item) => (
+          <AppItem key={item.meta.id} app={item.meta} onOpen={() => openItem(item)} />
         ))}
       </div>
       <SubAppModal
